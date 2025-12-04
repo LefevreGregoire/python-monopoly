@@ -40,7 +40,7 @@ jeu.stats.afficher_statistiques()
 python3 monopoly.py
 ```
 
-## 🤖 Stratégies IA disponibles
+## Stratégies IA disponibles
 
 | Stratégie | Description |
 |-----------|-------------|
@@ -48,7 +48,7 @@ python3 monopoly.py
 | `IAConservative()` | Achète seulement si argent ≥ 2× le prix |
 | `IAStrategique()` | Privilégie les quartiers complets et optimise la construction |
 
-## 🏗️ Structure du projet
+## Structure du projet
 
 ```
 python-monopoly/
@@ -59,7 +59,7 @@ python-monopoly/
     └── plato.sql
 ```
 
-## 🎮 Classes principales
+## Classes principales
 
 | Classe | Description |
 |--------|-------------|
@@ -115,4 +115,4 @@ Licence MIT
 
 ## Auteur
 
-LefevreGregoire et Théo Declerq
+Grégoire Lefèvre, Théo Declerq et Maxime Mansiet 
