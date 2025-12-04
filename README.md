@@ -1,8 +1,8 @@
-# 🎲 Python Monopoly
+# Python Monopoly
 
-Un jeu de Monopoly complet en Python, développé dans le cadre d'un TP pédagogique sur la programmation orientée objet.
+Un jeu de Monopoly complet en Python.
 
-## 📋 Description
+## Description
 
 Ce projet implémente une simulation du jeu Monopoly avec :
 - Un plateau de 40 cases (version française)
@@ -13,9 +13,10 @@ Ce projet implémente une simulation du jeu Monopoly avec :
 - 3 stratégies d'Intelligence Artificielle
 - Statistiques de partie
 
-## 🚀 Lancement rapide
+## Lancement rapide
 
 ### Lancer une partie simple
+
 ```python
 from monopoly import Monopoly
 
@@ -24,6 +25,7 @@ jeu.jouer_partie(max_tours=100)
 ```
 
 ### Lancer avec une IA et des statistiques
+
 ```python
 from monopoly import MonopolyIA, IAStrategique
 
@@ -33,6 +35,7 @@ jeu.stats.afficher_statistiques()
 ```
 
 ### Lancer tous les tests
+
 ```bash
 python3 monopoly.py
 ```
@@ -51,39 +54,10 @@ python3 monopoly.py
 python-monopoly/
 ├── monopoly.py          # Code principal du jeu
 ├── README.md            # Ce fichier
-└── monopoly/            # Fichiers SQL (optionnel)
+└── monopoly/            # Fichiers SQL
     ├── monopoly.sqlproj
     └── plato.sql
 ```
-
-## 📚 Séances du TP
-
-### Séance 1 : Fondations
-- Création du plateau (40 cases)
-- Déplacement des joueurs avec dés
-- Passage par la case Départ (+200€)
-- Achat de propriétés
-- Paiement des loyers
-
-### Séance 2 : Mécanique de jeu
-- Cases spéciales (Départ, Prison, Taxes, etc.)
-- Construction de maisons et hôtels
-- Calcul des loyers avec bonus
-- Gares (loyer progressif selon le nombre)
-- Compagnies (loyer basé sur les dés)
-
-### Séance 3 : Jouabilité complète
-- Système de prison (3 façons d'entrer, 3 façons de sortir)
-- Cartes Chance (10 cartes)
-- Cartes Caisse de Communauté (10 cartes)
-- Gestion des faillites
-- Boucle de jeu complète
-
-### Séance 4 : IA et Analyse
-- 3 stratégies d'IA avec héritage
-- Système de statistiques
-- Analyse des cases les plus visitées
-- Analyse des propriétés les plus rentables
 
 ## 🎮 Classes principales
 
@@ -101,7 +75,7 @@ python-monopoly/
 | `StrategieIA` | Classe de base pour les IA |
 | `StatistiquesPartie` | Collecte les stats de jeu |
 
-## 📊 Exemple de statistiques
+## Exemple de statistiques
 
 ```
 ============================================================
@@ -122,7 +96,7 @@ Top 5 des propriétés les plus rentables:
   Avenue des Champs-Élysées: 560€ de loyers
 ```
 
-## ⚙️ Configuration base de données (optionnel)
+## Configuration base de données
 
 Le jeu peut charger les propriétés depuis une base MySQL. Sans base de données, un plateau par défaut est créé automatiquement.
 
@@ -135,10 +109,10 @@ password="Azerty*!*"
 database="Toto"
 ```
 
-## 📝 Licence
+## Licence
 
-Projet pédagogique - Usage éducatif
+Licence MIT
 
-## 👤 Auteur
+## Auteur
 
-LefevreGregoire
+LefevreGregoire et Théo Declerq
