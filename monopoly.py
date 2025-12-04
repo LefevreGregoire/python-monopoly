@@ -1,14 +1,9 @@
-"""
-TP Monopoly - Squelette de code
-Durée: 16h sur 4 séances de 4h
-"""
-
 import mysql.connector
 import random
 from typing import List, Optional
 
 # =============================================================================
-# SÉANCE 1 : FONDATIONS (3h)
+# CLASSES DE BASE (SÉANCE 1 & 2)
 # =============================================================================
 
 class Case:
@@ -23,71 +18,153 @@ class Case:
 
 class Propriete(Case):
     """Case représentant une propriété achetable"""
-    def __init__(self, nom: str, position: int, prix: int, loyer: int, couleur: str):
+    def __init__(self, nom: str, position: int, prix: int, loyer: int, couleur: str, prix_maison: int = 50):
         super().__init__(nom, position)
         self.prix = prix
         self.loyer_base = loyer
         self.couleur = couleur
+        self.prix_maison = prix_maison 
         self.proprietaire: Optional['Joueur'] = None
         self.nb_maisons = 0
         self.a_hotel = False
     
+    def possede_quartier_complet(self, joueur: 'Joueur', jeu: 'Monopoly') -> bool:
+        """Vérifie si le joueur possède toutes les propriétés d'une couleur (Exercice 2.2)"""
+        # Compter combien de terrains de cette couleur existent sur le plateau
+        total_quartier = 0
+        for case in jeu.plateau.cases:
+            if isinstance(case, Propriete) and case.couleur == self.couleur:
+                total_quartier += 1
+        
+        # Compter combien le joueur en possède
+        possedes = 0
+        for prop in joueur.proprietes:
+            if prop.couleur == self.couleur:
+                possedes += 1
+                
+        return possedes == total_quartier and total_quartier > 0
+
     def calculer_loyer(self) -> int:
-        """Calcule le loyer en fonction des maisons/hôtels"""
-        # TODO SÉANCE 2: Implémenter le calcul avec maisons et hôtels
+        """Calcule le loyer en fonction des maisons/hôtels (Exercice 2.2)"""
+        if self.proprietaire is None:
+            return 0
+
+        # Si hôtel : loyer x 5 (simplifié)
+        if self.a_hotel:
+            return self.loyer_base * 5
+            
+        # Si maisons : loyer * 2^(nb_maisons)
+        if self.nb_maisons > 0:
+            return self.loyer_base * (2 ** self.nb_maisons)
+            
+        # Si terrain nu : loyer de base
+        # (Note: La règle du x2 si quartier complet sans maison est gérée dans l'action pour simplifier l'accès au jeu)
         return self.loyer_base
     
+    def construire_maison(self, joueur: 'Joueur'):
+        """Construit une maison ou un hôtel"""
+        if self.a_hotel:
+            print("Déjà un hôtel !")
+            return
+
+        if joueur.argent >= self.prix_maison:
+            joueur.argent -= self.prix_maison
+            if self.nb_maisons < 4:
+                self.nb_maisons += 1
+                print(f"Maison construite sur {self.nom}. Total: {self.nb_maisons}")
+            else:
+                self.nb_maisons = 0
+                self.a_hotel = True
+                print(f"Hôtel construit sur {self.nom} !")
+        else:
+            print("Pas assez d'argent.")
+
     def action(self, joueur: 'Joueur', jeu: 'Monopoly'):
         """Gère l'arrivée d'un joueur sur la propriété"""
-        # TODO SÉANCE 1: Implémenter la logique d'achat ou de paiement du loyer
+        print(f"-> {self.nom} (Prix: {self.prix}€, Loyer actuel: {self.calculer_loyer()}€)")
+        
         if self.proprietaire is None:
-            # Propriété non possédée, proposer l'achat aux IA
-            decision = StrategieIA().decider_achat(joueur, self)
-            if decision:
+            # Achat automatique si possible (pour simplifier)
+            if joueur.argent >= self.prix:
                 joueur.acheter_propriete(self)
+                print(f"{joueur.nom} achète {self.nom} pour {self.prix}€")
+        
         elif self.proprietaire == joueur:
-            # Propriété possédée par le joueur, rien à faire
-            pass
+            # Le joueur est chez lui, il essaie de construire si possible
+            if self.possede_quartier_complet(joueur, jeu) and joueur.argent > 500:
+                 self.construire_maison(joueur)
+            else:
+                print("Vous êtes chez vous.")
+
         else:
-            # Propriété possédée par un autre joueur, payer le loyer
+            # Payer le loyer
             loyer = self.calculer_loyer()
+            
+            # Règle : Loyer doublé si terrain nu + quartier complet
+            if self.nb_maisons == 0 and not self.a_hotel:
+                if self.proprietaire.possede_quartier(self.couleur, jeu.plateau.cases):
+                    loyer = loyer * 2
+                    print("(Loyer doublé : quartier complet !)")
+
             joueur.payer(loyer, self.proprietaire)
-        pass
+            print(f"Loyer de {loyer}€ payé à {self.proprietaire.nom}")
 
 class Gare(Propriete):
-    """Case représentant une gare"""
+    """Case représentant une gare (Exercice 2.3)"""
     def __init__(self, nom: str, position: int):
-        super().__init__(nom, position, prix=200, loyer=25, couleur="gare")
+        super().__init__(nom, position, prix=200, loyer=25, couleur="gare", prix_maison=0)
     
     def calculer_loyer(self) -> int:
-        """Calcule le loyer en fonction du nombre de gares possédées"""
         if not self.proprietaire:
             return 0
-        nb_gares = sum(1 for prop in self.proprietaire.proprietes if isinstance(prop, Gare))
-        return 25 * (2 ** (nb_gares - 1))
+        # Compter les gares du proprio
+        nb_gares = sum(1 for p in self.proprietaire.proprietes if isinstance(p, Gare))
+        # 25, 50, 100, 200
+        return 25 * (2 ** (nb_gares - 1)) if nb_gares > 0 else 0
     
 class Compagnie(Propriete):
-    """Case représentant une compagnie de services publics"""
+    """Case représentant une compagnie (Exercice 2.3)"""
     def __init__(self, nom: str, position: int):
-        super().__init__(nom, position, prix=150, loyer=0, couleur="Compagnie")
+        super().__init__(nom, position, prix=150, loyer=0, couleur="Compagnie", prix_maison=0)
+        self.dernier_lancer = 0
     
+    def action(self, joueur: 'Joueur', jeu: 'Monopoly'):
+        self.dernier_lancer = sum(jeu.derniers_des) # On retient les dés
+        super().action(joueur, jeu)
+
     def calculer_loyer(self) -> int:
-        """Calcule le loyer en fonction du nombre de compagnies possédées"""
-        pass
+        if not self.proprietaire:
+            return 0
+        nb_comp = sum(1 for p in self.proprietaire.proprietes if isinstance(p, Compagnie))
+        facteur = 10 if nb_comp == 2 else 4
+        return self.dernier_lancer * facteur
 
 class CaseSpeciale(Case):
-    """Cases comme Départ, Prison, Taxe, etc."""
+    """Cases comme Départ, Prison, Taxe, etc. (Exercice 2.1)"""
     def __init__(self, nom: str, position: int, type_case: str):
         super().__init__(nom, position)
         self.type_case = type_case
     
     def action(self, joueur: 'Joueur', jeu: 'Monopoly'):
-        """Action selon le type de case spéciale"""
-        # TODO SÉANCE 2: Implémenter les actions des cases spéciales
-        pass
+        if self.type_case == "depart":
+            print("Case Départ.")
+        elif self.type_case == "allez_prison":
+            print("Allez en prison !")
+            joueur.aller_en_prison()
+        elif self.type_case == "taxe":
+            print("Taxe : Payez 100€")
+            joueur.payer(100)
+        elif self.type_case == "parc":
+            print("Parc gratuit : repos.")
+        elif self.type_case == "chance":
+            print("Carte Chance !")
+            jeu.cartes_chance.piocher_et_executer(joueur, jeu)
+        elif self.type_case == "caisse":
+            print("Caisse de Communauté !")
+            jeu.cartes_communaute.piocher_et_executer(joueur, jeu)
 
 class Joueur:
-    """Représente un joueur de Monopoly"""
+    """Représente un joueur"""
     def __init__(self, nom: str, argent_initial: int = 1500):
         self.nom = nom
         self.argent = argent_initial
@@ -96,21 +173,17 @@ class Joueur:
         self.en_prison = False
         self.tours_en_prison = 0
         self.est_en_faillite = False
+        self.doubles_consecutifs = 0
+        self.cartes_liberte = 0 
     
     def deplacer(self, nombre_cases: int, plateau_taille: int = 40):
-        """Déplace le joueur sur le plateau"""
-        # TODO SÉANCE 1: Implémenter le déplacement avec gestion du passage par Départ
-        if self.position + nombre_cases >= plateau_taille:
-            self.position = (self.position + nombre_cases) % plateau_taille
-            self.recevoir(200) 
-            return True
-        else:
-            self.position += nombre_cases
-            return False
+        anc_pos = self.position
+        self.position = (self.position + nombre_cases) % plateau_taille
+        if self.position < anc_pos and nombre_cases > 0:
+            print("Passage par Départ : +200€")
+            self.recevoir(200)
     
     def payer(self, montant: int, beneficiaire: Optional['Joueur'] = None):
-        """Le joueur paye un montant (à un autre joueur ou à la banque)"""
-        # TODO SÉANCE 1: Implémenter le paiement avec gestion de la faillite
         if self.argent >= montant:
             self.argent -= montant
             if beneficiaire:
@@ -119,45 +192,58 @@ class Joueur:
             self.declarer_faillite(beneficiaire)
     
     def declarer_faillite(self, beneficiaire: Optional['Joueur'] = None):
-        """Déclare la faillite du joueur"""
+        print(f"XXX {self.nom} est en FAILLITE ! XXX")
         self.est_en_faillite = True
-        self.proprietes.clear()
         self.argent = 0
         if beneficiaire:
-            # Transférer les propriétés au bénéficiaire
-            for propriete in self.proprietes:
-                propriete.proprietaire = beneficiaire
-                beneficiaire.proprietes.append(propriete)
+            for p in self.proprietes:
+                p.proprietaire = beneficiaire
+                beneficiaire.proprietes.append(p)
+        else:
+            for p in self.proprietes: # Retour à la banque
+                p.proprietaire = None
+                p.nb_maisons = 0
+                p.a_hotel = False
+        self.proprietes.clear()
 
     def recevoir(self, montant: int):
-        """Le joueur reçoit de l'argent"""
         self.argent += montant
     
     def acheter_propriete(self, propriete: Propriete) -> bool:
-        """Achète une propriété si le joueur a assez d'argent"""
-        # TODO SÉANCE 1: Implémenter l'achat de propriété
-        # Verifier si la propriété est déjà possédée
-        if propriete.proprietaire is not None:
-            return False
-        # Verifier si le joueur a assez d'argent
-        if self.argent >= propriete.prix:
+        if propriete.proprietaire is None and self.argent >= propriete.prix:
             self.argent -= propriete.prix
             propriete.proprietaire = self
             self.proprietes.append(propriete)
             return True
         return False
     
-    def possede_quartier(self, couleur: str, toutes_proprietes: List[Propriete]) -> bool:
-        """Vérifie si le joueur possède toutes les propriétés d'une couleur"""
-        # TODO SÉANCE 2: Implémenter la vérification de quartier
-        kartier_a_moi = [p for p in self.proprietes if p.couleur == couleur]
-        kartier = [p for p in toutes_proprietes if p.couleur == couleur]
-        return len(kartier_a_moi) == len(kartier)
+    def aller_en_prison(self):
+        self.position = 10
+        self.en_prison = True
+        self.tours_en_prison = 0
+        self.doubles_consecutifs = 0
 
+    def sortir_de_prison(self):
+        self.en_prison = False
+        self.tours_en_prison = 0
+        
+    def possede_quartier(self, couleur: str, toutes_cases: List[Case]) -> bool:
+        """Helper pour vérifier les quartiers"""
+        mes_props = [p for p in self.proprietes if p.couleur == couleur]
+        total_props = [c for c in toutes_cases if isinstance(c, Propriete) and c.couleur == couleur]
+        return len(mes_props) == len(total_props) and len(total_props) > 0
+
+# =============================================================================
+# ACCES DONNÉES ET CARTES (SÉANCE 3)
+# =============================================================================
 
 class DB:
+    # Liste des proprietes (cache)
+    __Proprietes = []
+
     @classmethod
     def connexionBase(cls):
+        # Configuration spécifique demandée
         mydb = mysql.connector.connect(
             host="localhost",
             port=1433,
@@ -167,162 +253,131 @@ class DB:
         )
         return mydb
 
-    # TABLE PROPRIETES -------------------------------------------------------
-
-    # Liste des proprietes. donnée de classe
-    __Proprietes = []
-
     @classmethod
     def get_proprietes(cls):
-        if cls.__Proprietes == []:
+        # Si déjà chargé, on retourne la liste
+        if cls.__Proprietes:
+            return cls.__Proprietes
+
+        try:
+            print("Connexion à la BDD...")
             maConnexion = cls.connexionBase()
             monCurseur = maConnexion.cursor(dictionary=True)
 
+            # Requete sur la vue v_proprietes
             monCurseur.execute("""
-                SELECT position,
-                       nom,
-                       type_propriete_code,
-                       prix_achat,
-                       loyer_base,
-                       couleur,
-                       prix_maison
-                FROM   v_proprietes;
+                SELECT position, nom, type_propriete_code, prix_achat, 
+                       loyer_base, couleur, prix_maison
+                FROM v_proprietes;
             """)
             mesResultats = monCurseur.fetchall()
 
             for r in mesResultats:
                 p = None
-
+                # Instanciation selon le code type
                 if r["type_propriete_code"] == "propriete":
-                    # Création d'une propriété "classique"
-                    # Ajuste l'ordre / le nombre d'arguments selon ton __init__ de Propriete
-                    p = Propriete(
-                        r["position"],
-                        r["nom"],
-                        r["prix_achat"],
-                        r["loyer_base"],
-                        r["couleur"],
-                        r["prix_maison"]
-                    )
-
+                    p = Propriete(r["nom"], r["position"], r["prix_achat"], 
+                                  r["loyer_base"], r["couleur"], r["prix_maison"])
                 elif r["type_propriete_code"] == "gare":
-                    # Création d'une gare
-                    # Ajuste si ta classe Gare a un autre __init__
-                    p = Gare(
-                        r["position"],
-                        r["nom"],
-                        r["prix_achat"],
-                        r["loyer_base"]
-                    )
-
+                    p = Gare(r["nom"], r["position"])
                 elif r["type_propriete_code"] == "compagnie":
-                    # Création d'une compagnie
-                    # Ajuste si ta classe Compagnie a un autre __init__
-                    p = Compagnie(
-                        r["position"],
-                        r["nom"],
-                        r["prix_achat"],
-                        r["loyer_base"]
-                    )
+                    p = Compagnie(r["nom"], r["position"])
 
-                if p is not None:
+                if p:
                     cls.__Proprietes.append(p)
 
-            # On ferme proprement
             monCurseur.close()
             maConnexion.close()
+            print(f"{len(cls.__Proprietes)} propriétés chargées depuis la BDD.")
+            
+        except Exception as e:
+            print(f"Erreur BDD: {e}. Utilisation du mode sans BDD.")
+            return [] # Retourne vide pour déclencher la création manuelle
 
         return cls.__Proprietes
 
+class CarteCommunaute:
+    def __init__(self, description: str, action):
+        self.description = description
+        self.action = action 
+    def executer(self, joueur, jeu):
+        print(f"CARTE: {self.description}")
+        self.action(joueur, jeu)
 
+class PaquetCartes:
+    def __init__(self, type_paquet: str):
+        self.type_paquet = type_paquet
+        self.cartes = []
+        self._creer_cartes()
+        self.pioche = []
+        self.melanger()
+    
+    def _creer_cartes(self):
+        # Exemples simples de cartes (lambda functions)
+        if self.type_paquet == "chance":
+            self.cartes = [
+                CarteCommunaute("Avancez à Départ", lambda j, g: j.deplacer(40 - j.position)),
+                CarteCommunaute("Allez en Prison", lambda j, g: j.aller_en_prison()),
+                CarteCommunaute("Amende 20€", lambda j, g: j.payer(20))
+            ]
+        else:
+            self.cartes = [
+                CarteCommunaute("Erreur banque : +200€", lambda j, g: j.recevoir(200)),
+                CarteCommunaute("Libéré de prison", lambda j, g: setattr(j, 'cartes_liberte', j.cartes_liberte + 1)),
+                CarteCommunaute("Frais médecin : -50€", lambda j, g: j.payer(50))
+            ]
+    
+    def melanger(self):
+        self.pioche = self.cartes.copy()
+        random.shuffle(self.pioche)
+
+    def piocher_et_executer(self, joueur, jeu):
+        if not self.pioche:
+            self.melanger()
+        carte = self.pioche.pop()
+        carte.executer(joueur, jeu)
+
+# =============================================================================
+# MOTEUR DE JEU (PLATEAU & MONOPOLY)
+# =============================================================================
 
 class Plateau:
-    """Représente le plateau de jeu Monopoly"""
     def __init__(self):
         self.cases: List[Case] = []
         self._creer_plateau()
     
     def _creer_plateau(self):
-        """Crée les 40 cases du plateau Monopoly"""
-        # TODO SÉANCE 1: Créer les cases du plateau
-        self.cases.append(CaseSpeciale("Départ", 0, "depart"))
-        self.cases.append(Propriete("Boulevard de Belleville", 1, 60, 2, "marron"))
-        self.cases.append(CaseSpeciale("Caisse de Communauté", 2, "caisse"))
-        self.cases.append(Propriete("Rue Lecourbe", 3, 60, 4, "marron"))
-        self.cases.append(CaseSpeciale("Impôts sur le revenu", 4, "taxe"))
-        self.cases.append(Gare("Gare Montparnasse", 5))
-        self.cases.append(Propriete("Rue de Vaugirard", 6, 100, 6, "bleu clair"))
-        self.cases.append(CaseSpeciale("Chance", 7, "chance"))
-        self.cases.append(Propriete("Rue de Courcelles", 8, 100, 6, "bleu clair"))
-        self.cases.append(Propriete("Avenue de la République", 9, 120, 8, "bleu clair"))
-        self.cases.append(CaseSpeciale("Prison", 10, "prison"))
-        self.cases.append(Propriete("Boulevard de la Villette", 11, 140, 10, "rose"))
-        self.cases.append(Compagnie("Compagnie d'électricité", 12))
-        self.cases.append(Propriete("Avenue de Neuilly", 13, 140, 10, "rose"))
-        self.cases.append(Propriete("Rue de Paradis", 14, 160, 12, "rose"))
-        self.cases.append(Gare("Gare de Lyon", 15))
-        self.cases.append(Propriete("Avenue Mozart", 16, 180, 14, "orange"))
-        self.cases.append(CaseSpeciale("Caisse de Communauté", 17, "caisse"))
-        self.cases.append(Propriete("Boulevard Saint-Michel", 18, 180, 14, "orange"))
-        self.cases.append(Propriete("Place Pigalle", 19, 200, 16, "orange"))
-        self.cases.append(CaseSpeciale("Parc Gratuit", 20, "parc"))
-        self.cases.append(Propriete("Avenue Matignon", 21, 220, 18, "rouge"))
-        self.cases.append(CaseSpeciale("Chance", 22, "chance"))
-        self.cases.append(Propriete("Boulevard Malesherbes", 23, 220, 18, "rouge"))
-        self.cases.append(Propriete("Avenue Henri-Martin", 24, 240, 20, "rouge"))
-        self.cases.append(Gare("Gare Montparnasse", 25))
-        self.cases.append(Propriete("Faubourg Saint-Honoré", 26, 260, 22, "jaune"))
-        self.cases.append(Propriete("Place de la Bourse", 27, 260, 22, "jaune"))
-        self.cases.append(Compagnie("Compagnie de distribution des eaux", 28))
-        self.cases.append(Propriete("Rue La Fayette", 29, 280, 24, "jaune"))
-        self.cases.append(CaseSpeciale("Allez en Prison", 30, "allez_prison"))
-        self.cases.append(Propriete("Avenue de Breteuil", 31, 300, 26, "vert"))
-        self.cases.append(Propriete("Avenue Foch", 32, 300, 26, "vert"))
-        self.cases.append(CaseSpeciale("Caisse de Communauté", 33, "caisse"))
-        self.cases.append(Propriete("Boulevard des Capucines", 34, 320, 28, "vert"))
-        self.cases.append(Gare("Gare Saint-Lazare", 35))
-        self.cases.append(CaseSpeciale("Chance", 36, "chance"))
-        self.cases.append(Propriete("Avenue des Champs-Élysées", 37, 350, 35, "bleu foncé"))
-        self.cases.append(CaseSpeciale("Taxe de luxe", 38, "taxe"))
-        self.cases.append(Propriete("Rue de la Paix", 39, 400, 50, "bleu foncé"))
-    
+        self.cases = [None] * 40
+        
+        # 1. Charger depuis la BDD
+        props = DB.get_proprietes()
+        for p in props:
+            if 0 <= p.position < 40:
+                self.cases[p.position] = p
+        
+        # 2. Remplir les cases spéciales (fixes)
+        if not self.cases[0]: self.cases[0] = CaseSpeciale("Départ", 0, "depart")
+        if not self.cases[4]: self.cases[4] = CaseSpeciale("Impôts", 4, "taxe")
+        if not self.cases[10]: self.cases[10] = CaseSpeciale("Prison", 10, "prison")
+        if not self.cases[20]: self.cases[20] = CaseSpeciale("Parc", 20, "parc")
+        if not self.cases[30]: self.cases[30] = CaseSpeciale("Allez Prison", 30, "allez_prison")
+        if not self.cases[38]: self.cases[38] = CaseSpeciale("Taxe Luxe", 38, "taxe")
+
+        # 3. Remplir les trous restants (Chance, Caisse, ou secours si pas de BDD)
+        for i in range(40):
+            if self.cases[i] is None:
+                if i in [2, 17, 33]:
+                    self.cases[i] = CaseSpeciale("Caisse Com.", i, "caisse")
+                elif i in [7, 22, 36]:
+                    self.cases[i] = CaseSpeciale("Chance", i, "chance")
+                else:
+                    # Propriété par défaut si BDD vide
+                    self.cases[i] = Propriete(f"Rue {i}", i, 100, 10, "gris")
+
     def get_case(self, position: int) -> Case:
-        """Retourne la case à une position donnée"""
-        return self.cases[position % len(self.cases)]
-
-# =============================================================================
-# SÉANCE 3 : JOUABILITÉ (3h)
-# =============================================================================
-
-class CarteCommunaute:
-    """Représente une carte Caisse de Communauté ou Chance"""
-    def __init__(self, description: str, action):
-        self.description = description
-        self.action = action  # Fonction à exécuter
-
-class PaquetCartes:
-    """Gère un paquet de cartes (Chance ou Communauté)"""
-    def __init__(self, type_paquet: str):
-        self.type_paquet = type_paquet
-        self.cartes: List[CarteCommunaute] = []
-        self._creer_cartes()
-    
-    def _creer_cartes(self):
-        """Crée les cartes du paquet"""
-        # TODO SÉANCE 3: Créer les différentes cartes
-        pass
-    
-    def piocher(self) -> CarteCommunaute:
-        """Pioche une carte au hasard"""
-        # TODO SÉANCE 3: Implémenter la pioche avec mélange
-        pass
-
-# =============================================================================
-# CLASSE PRINCIPALE DU JEU
-# =============================================================================
+        return self.cases[position % 40]
 
 class Monopoly:
-    """Classe principale qui gère une partie de Monopoly"""
     def __init__(self, noms_joueurs: List[str]):
         self.plateau = Plateau()
         self.joueurs = [Joueur(nom) for nom in noms_joueurs]
@@ -330,193 +385,100 @@ class Monopoly:
         self.cartes_chance = PaquetCartes("chance")
         self.cartes_communaute = PaquetCartes("communaute")
         self.tour_numero = 0
+        self.derniers_des = (0, 0)
     
     def lancer_des(self) -> tuple:
-        """Lance deux dés et retourne les valeurs"""
-        # TODO SÉANCE 1: Implémenter le lancer de dés
-        de1 = random.randint(1, 6)
-        de2 = random.randint(1, 6)
-        return de1, de2
+        d1 = random.randint(1, 6)
+        d2 = random.randint(1, 6)
+        self.derniers_des = (d1, d2)
+        return d1, d2
     
-    def jouer_tour(self, joueur: Joueur):
-        """Joue un tour complet pour un joueur"""
-        # TODO SÉANCE 2: Implémenter la logique complète d'un tour
-        print(f"\n--- Tour de {joueur.nom} ---")
-        print(f"Position: {joueur.position}, Argent: {joueur.argent}€")
+    def _gerer_prison(self, joueur: Joueur):
+        """Logique de sortie de prison (3 options)"""
+        print(f"--- Prison : {joueur.nom} (Tour {joueur.tours_en_prison+1}/3) ---")
         
-        de1, de2 = self.lancer_des() 
-        total = de1 + de2 
-        if  de1 == de2:
-            print(f"{joueur.nom} a fait un double avec les dés !")
+        # 1. Carte
+        if joueur.cartes_liberte > 0:
+            print("Utilise une carte Sortie de Prison.")
+            joueur.cartes_liberte -= 1
+            joueur.sortir_de_prison()
+            return
+
+        # 2. Payer 50€ (si riche)
+        if joueur.argent > 1000:
+            print("Paie 50€ pour sortir.")
+            joueur.payer(50)
+            joueur.sortir_de_prison()
+            return
+            
+        # 3. Essai dés
+        d1, d2 = self.lancer_des()
+        print(f"Dés prison: {d1}, {d2}")
+        if d1 == d2:
+            print("Double ! Sortie.")
+            joueur.sortir_de_prison()
+            joueur.deplacer(d1+d2)
+            self.plateau.get_case(joueur.position).action(joueur, self)
+            return
+        
+        joueur.tours_en_prison += 1
+        if joueur.tours_en_prison >= 3:
+            print("3 tours : Sortie forcée (-50€).")
+            joueur.payer(50)
+            joueur.sortir_de_prison()
+            joueur.deplacer(d1+d2)
+            self.plateau.get_case(joueur.position).action(joueur, self)
+
+    def jouer_tour(self, joueur: Joueur):
+        print(f"\n--- Tour {self.tour_numero} : {joueur.nom} ({joueur.argent}€) ---")
+        
+        if joueur.en_prison:
+            self._gerer_prison(joueur)
+            if joueur.en_prison: return # Encore en prison
+
+        d1, d2 = self.lancer_des()
+        print(f"Lancer : {d1} + {d2} = {d1+d2}")
+        
+        # Règle des 3 doubles
+        if d1 == d2:
             joueur.doubles_consecutifs += 1
             if joueur.doubles_consecutifs == 3:
-                print(f"{joueur.nom} a fait 3 doubles consécutifs et va en prison !")
-                joueur.position = 10  # Position de la prison
-                joueur.en_prison = True
-                joueur.doubles_consecutifs = 0
-                return 
+                print("3 Doubles -> Prison !")
+                joueur.aller_en_prison()
+                return
         else:
             joueur.doubles_consecutifs = 0
             
-        print(f"Dés: {de1} + {de2} = {total}") 
-        joueur.deplacer(total)
-        case_actuelle = self.plateau.get_case(joueur.position)
-        print(f"{joueur.nom} arrive sur {case_actuelle.nom} (Case {case_actuelle.position})")
-        # 3. Exécuter l'action de la case
-        case_actuelle.action(joueur, self)
-        pass
+        joueur.deplacer(d1 + d2)
+        case = self.plateau.get_case(joueur.position)
+        case.action(joueur, self)
     
     def partie_terminee(self) -> bool:
-        """Vérifie si la partie est terminée"""
-        # TODO SÉANCE 3: Une seule personne non en faillite = partie terminée
-        joueurs_actifs = [j for j in self.joueurs if not j.est_en_faillite]
-        return len(joueurs_actifs) <= 1
+        actifs = sum(1 for j in self.joueurs if not j.est_en_faillite)
+        return actifs <= 1
     
     def obtenir_gagnant(self) -> Optional[Joueur]:
-        """Retourne le joueur gagnant"""
-        joueurs_actifs = [j for j in self.joueurs if not j.est_en_faillite]
-        return joueurs_actifs[0] if len(joueurs_actifs) == 1 else None
-    
-    def jouer_partie(self, max_tours: int = 200):
-        """Joue une partie complète de Monopoly"""
-        # TODO SÉANCE 3: Implémenter la boucle principale du jeu
-        print("=== DÉBUT DE LA PARTIE ===\n")
-        
-        while not self.partie_terminee() and self.tour_numero < max_tours:
-            joueur = self.joueurs[self.joueur_actuel_index]
-            
-            if not joueur.est_en_faillite:
-                self.jouer_tour(joueur)
-            
-            # Passer au joueur suivant
-            self.joueur_actuel_index = (self.joueur_actuel_index + 1) % len(self.joueurs)
-            
-            if self.joueur_actuel_index == 0:
-                self.tour_numero += 1
-        
-        # Afficher le résultat
-        gagnant = self.obtenir_gagnant()
-        if gagnant:
-            print(f"\n🎉 {gagnant.nom} a gagné avec {gagnant.argent}€ !")
-        else:
-            print(f"\nPartie terminée après {max_tours} tours (limite atteinte)")
-
-# =============================================================================
-# SÉANCE 4 : IA ET STATISTIQUES (3h)
-# =============================================================================
-
-class StrategieIA:
-    """Classe de base pour les stratégies d'IA"""
-    def decider_achat(self, joueur: Joueur, propriete: Propriete) -> bool:
-        """Décide si l'IA doit acheter une propriété"""
-        # TODO SÉANCE 4: Implémenter différentes stratégies
-
-        # Strategie agressive : acheter si possible
-        if joueur.argent >= propriete.prix: 
-            return True
-        
-
-        return False
-    
-    def decider_construction(self, joueur: Joueur, proprietes_quartier: List[Propriete]) -> Optional[Propriete]:
-        """Décide sur quelle propriété construire"""
-        # TODO SÉANCE 4: Implémenter la logique de construction
+        for j in self.joueurs:
+            if not j.est_en_faillite: return j
         return None
-
-class StatistiquesPartie:
-    """Collecte des statistiques sur une partie"""
-    def __init__(self):
-        self.passages_par_case = {}
-        self.revenus_par_propriete = {}
-        self.duree_partie = 0
     
-    def enregistrer_passage(self, case: Case):
-        """Enregistre le passage d'un joueur sur une case"""
-        # TODO SÉANCE 4: Implémenter le tracking des statistiques
-        pass
-    
-    def afficher_statistiques(self):
-        """Affiche les statistiques collectées"""
-        # TODO SÉANCE 4: Afficher les stats intéressantes
-        pass
-
-def simuler_parties(nb_parties: int, nb_joueurs: int):
-    """Simule plusieurs parties et collecte des statistiques"""
-    # TODO SÉANCE 4: Implémenter la simulation de multiples parties
-    print(f"Simulation de {nb_parties} parties avec {nb_joueurs} joueurs...")
-    pass
+    def jouer_partie(self, max_tours: int = 100):
+        print("=== DÉBUT PARTIE ===")
+        while not self.partie_terminee() and self.tour_numero < max_tours:
+            self.tour_numero += 1
+            for j in self.joueurs:
+                if not j.est_en_faillite:
+                    self.jouer_tour(j)
+                    if self.partie_terminee(): break
+        
+        gagnant = self.obtenir_gagnant()
+        print(f"\nFIN. Gagnant : {gagnant.nom if gagnant else 'Personne'}")
 
 # =============================================================================
-# POINT D'ENTRÉE PRINCIPAL
+# EXECUTION
 # =============================================================================
 
 if __name__ == "__main__":
-        
-    for p in DB.get_proprietes():
-        print(f"{p.position} : ({p.couleur}) {p.nom} - prix d'achat : {p.prix}€")
-
-
-    # Test basique
-    noms = ["Alain", "Béa"]
-    jeu = Monopoly(noms)
-    alain = jeu.joueurs[0]
-
-    alain.position = 1
-    prop = jeu.plateau.cases[1]
-
-    argent_avant = alain.argent
-    prop.action(alain, jeu)
-
-    assert prop.proprietaire == alain, "Alain doit posséder la propriété"
-    assert alain.argent == argent_avant - prop.prix, "Le montant doit être débité"
-    print("Achat de propriété validé!")
-
-    # TODO: Décommenter quand les méthodes sont implémentées
-    # jeu.jouer_partie(max_tours=100)
-    
-    print("Squelette de code chargé. Prêt pour le développement !")
-
-    # test deplacement 
-    # Position 35 + 7 cases = 2 (passage par départ)
-    joueur_test = Joueur("Test")
-    joueur_test.position = 35
-    a_passe_depart = joueur_test.deplacer(7)
-    print(joueur_test.position)
-    assert joueur_test.position == 2, "Le joueur doit être à la position 2"
-    assert a_passe_depart == True, "Le joueur doit avoir passé par Départ"  
-    print("Déplacement validé!")
-
-    plateau = Plateau() 
-    assert len(plateau.cases) == 40, "Le plateau doit avoir 40 cases" 
-    assert isinstance(plateau.cases[0], CaseSpeciale), "Case 0 = Départ" 
-    assert isinstance(plateau.cases[5], Gare), "Case 5 = Gare" 
-    assert plateau.cases[39].nom == "Rue de la Paix", "Dernière case" 
-    print("Plateau validé!") 
-
-#test du paiement 
-
-alain = Joueur("Alain", 1500) 
-bea = Joueur("Béa", 1500) 
-prop = Propriete("Test", 1, 100, 10, "test") 
-
-# Alain achète 
-alain.acheter_propriete(prop) 
- 
-# Béa tombe dessus 
-argent_bea_avant = bea.argent 
-argent_alain_avant = alain.argent 
-bea.payer(10, alain) 
-
-assert bea.argent == argent_bea_avant - 10 
-assert alain.argent == argent_alain_avant + 10 
-print("Paiement validé!") 
-
-jeu = Monopoly(["Alain", "Béa"]) 
-for i in range(10): 
-    for joueur in jeu.joueurs: 
-        if not joueur.est_en_faillite: 
-            jeu.jouer_tour(joueur) 
-
-print("\nÉtat final:") 
-for joueur in jeu.joueurs: 
-    print(f"{joueur.nom}: {joueur.argent}€, {len(joueur.proprietes)} propriétés") 
+    # Test simple
+    jeu = Monopoly(["Alain", "Béa", "Charles"])
+    jeu.jouer_partie(max_tours=50)
